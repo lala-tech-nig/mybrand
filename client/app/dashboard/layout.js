@@ -57,7 +57,7 @@ const DashboardContent = ({ children }) => {
         <div className="p-4 border-t border-gray-200">
             <div className="mb-4 px-4 py-3 bg-zinc-50 rounded-lg border border-zinc-100">
                 <p className="text-xs text-zinc-500 uppercase font-semibold mb-1">Your Store</p>
-                <a href={`${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || ''}/${brand.username}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#FF6600] hover:text-orange-600 flex items-center gap-1">
+                <a href={`${process.env.NEXT_PUBLIC_API_URL_FRONT?.replace('/api', '') || ''}/${brand.username}`} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-[#FF6600] hover:text-orange-600 flex items-center gap-1">
                     {brand.username}.mybrand... <ExternalLink size={12} />
                 </a>
             </div>
