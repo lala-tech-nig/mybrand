@@ -7,7 +7,7 @@ import { LayoutDashboard, ShoppingBag, MessageSquare, Settings, LogOut, External
 import api from '../../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function DashboardLayout({ children }) {
+const DashboardContent = ({ children }) => {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const currentTab = searchParams.get('tab');
@@ -131,6 +131,14 @@ export default function DashboardLayout({ children }) {
                 {children}
             </main>
         </div>
+    );
+};
+
+export default function DashboardLayout({ children }) {
+    return (
+        <React.Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading...</div>}>
+            <DashboardContent children={children} />
+        </React.Suspense>
     );
 }
 
