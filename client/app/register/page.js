@@ -1,15 +1,20 @@
 'use client';
 
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../../utils/api';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Upload, CheckCircle, Store, User, CreditCard, ShieldCheck } from 'lucide-react';
+
+import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 
 export default function Register() {
     const router = useRouter();
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
+    const [logoPreview, setLogoPreview] = useState(null);
     const [formData, setFormData] = useState({
+        fullName: '',
         brandName: '',
         email: '',
         password: '',
@@ -17,17 +22,49 @@ export default function Register() {
         username: '', // Subdomain
         tier: 'Free',
         cacRegistered: false,
-        cacNumber: ''
+        cacNumber: '',
+        logo: null
     });
 
     const [error, setError] = useState('');
 
+    const config = {
+        public_key: process.env.NEXT_PUBLIC_FLUTTERWAVE_PUBLIC_KEY,
+        tx_ref: Date.now(),
+        amount: 2000,
+        currency: 'NGN',
+        payment_options: 'card,mobilemoney,ussd',
+        customer: {
+            email: formData.email,
+            phone_number: formData.whatsappNumber,
+            name: formData.fullName,
+        },
+        customizations: {
+            title: 'myBrand Premium',
+            description: 'Premium Subscription (₦2,000/mo)',
+            logo: 'https://cdn-icons-png.flaticon.com/512/44/44386.png',
+        },
+    };
+
+    const handleFlutterwavePayment = useFlutterwave(config);
+
     const handleChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
+        const { name, value, type, checked, files } = e.target;
+
+        if (type === 'file') {
+            const file = files[0];
+            setFormData(prev => ({ ...prev, [name]: file }));
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => setLogoPreview(reader.result);
+                reader.readAsDataURL(file);
+            }
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: type === 'checkbox' ? checked : value
+            }));
+        }
     };
 
     const handleNext = (e) => {
@@ -39,16 +76,19 @@ export default function Register() {
         setStep(prev => prev - 1);
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-
+    const submitRegistration = async (transaction_id = null) => {
         try {
-            const res = await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, formData);
-            // Save token
+            const data = new FormData();
+            Object.keys(formData).forEach(key => {
+                data.append(key, formData[key]);
+            });
+            if (transaction_id) {
+                data.append('transaction_id', transaction_id);
+            }
+
+            const res = await api.post('/api/auth/register', data);
+
             localStorage.setItem('token', res.data.token);
-            // Redirect to dashboard
             router.push('/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'Registration failed');
@@ -56,170 +96,300 @@ export default function Register() {
         }
     };
 
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        if (formData.tier === 'Premium') {
+            handleFlutterwavePayment({
+                callback: (response) => {
+                    closePaymentModal();
+                    if (response.status === "successful") {
+                        submitRegistration(response.transaction_id);
+                    } else {
+                        setLoading(false);
+                        toast.error("Payment failed. Please try again.");
+                    }
+                },
+                onClose: () => {
+                    setLoading(false);
+                },
+            });
+        } else {
+            submitRegistration();
+        }
+    };
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Create your brand
-                    </h2>
-                    <p className="mt-2 text-center text-sm text-gray-600">
-                        Step {step} of 3
-                    </p>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-8">
+                <h1 className="text-4xl font-extrabold tracking-tight text-zinc-900">
+                    my<span className="text-[var(--primary)]">Brand</span>
+                </h1>
+                <p className="mt-2 text-zinc-500">Launch your digital storefront in minutes.</p>
+            </div>
+
+            <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl overflow-hidden">
+                {/* Progress Bar */}
+                <div className="bg-zinc-100 h-2 w-full">
+                    <div
+                        className="h-full bg-[var(--primary)] transition-all duration-500 ease-in-out"
+                        style={{ width: `${(step / 3) * 100}%` }}
+                    />
                 </div>
 
-                {error && <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded">{error}</div>}
-
-                <form className="mt-8 space-y-6" onSubmit={step === 3 ? handleSubmit : handleNext}>
-
-                    {/* Step 1: Basic Info */}
-                    {step === 1 && (
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Brand Name</label>
-                                <input
-                                    name="brandName"
-                                    type="text"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
-                                    value={formData.brandName}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Email address</label>
-                                <input
-                                    name="email"
-                                    type="email"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
-                                    value={formData.email}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Password</label>
-                                <input
-                                    name="password"
-                                    type="password"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
-                                    value={formData.password}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">WhatsApp Number</label>
-                                <input
-                                    name="whatsappNumber"
-                                    type="tel"
-                                    required
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
-                                    value={formData.whatsappNumber}
-                                    onChange={handleChange}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Brand Identity */}
-                    {step === 2 && (
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Choose your Subdomain</label>
-                                <div className="mt-1 flex rounded-md shadow-sm">
-                                    <input
-                                        type="text"
-                                        name="username"
-                                        required
-                                        className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-l-md focus:ring-black focus:border-black sm:text-sm border-gray-300"
-                                        placeholder="yourbrand"
-                                        value={formData.username}
-                                        onChange={handleChange}
-                                    />
-                                    <span className="inline-flex items-center px-3 rounded-r-md border border-l-0 border-gray-300 bg-gray-50 text-gray-500 sm:text-sm">
-                                        .mybrand.com
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex items-start">
-                                <div className="flex items-center h-5">
-                                    <input
-                                        id="cacRegistered"
-                                        name="cacRegistered"
-                                        type="checkbox"
-                                        className="focus:ring-black h-4 w-4 text-black border-gray-300 rounded"
-                                        checked={formData.cacRegistered}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                                <div className="ml-3 text-sm">
-                                    <label htmlFor="cacRegistered" className="font-medium text-gray-700">Business is registered with CAC</label>
-                                </div>
-                            </div>
-
-                            {formData.cacRegistered && (
-                                <div className="animate-fade-in-down">
-                                    <label className="block text-sm font-medium text-gray-700">RC or BN Number</label>
-                                    <input
-                                        name="cacNumber"
-                                        type="text"
-                                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-black focus:border-black sm:text-sm"
-                                        value={formData.cacNumber}
-                                        onChange={handleChange}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Step 3: Tier Selection */}
-                    {step === 3 && (
-                        <div className="space-y-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Select a Plan</label>
-                            <div className="grid grid-cols-1 gap-3">
-                                {['Free', '1k', '2k', '3k', '5k'].map((tier) => (
-                                    <div
-                                        key={tier}
-                                        onClick={() => setFormData(prev => ({ ...prev, tier }))}
-                                        className={`cursor-pointer rounded-lg border p-4 flex items-center justify-between hover:border-black transition-colors ${formData.tier === tier ? 'border-2 border-black bg-gray-50' : 'border-gray-200'}`}
-                                    >
-                                        <div className="flex items-center">
-                                            <div className={`h-4 w-4 rounded-full border flex items-center justify-center mr-3 ${formData.tier === tier ? 'border-black' : 'border-gray-300'}`}>
-                                                {formData.tier === tier && <div className="h-2 w-2 rounded-full bg-black" />}
-                                            </div>
-                                            <span className="font-medium text-gray-900">{tier === 'Free' ? 'Free Plan' : `${tier} Plan`}</span>
-                                        </div>
-                                        <span className="text-gray-500 text-sm">{tier === 'Free' ? '₦0/mo' : `₦${tier.replace('k', ',000')}/mo`}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex justify-between space-x-3">
-                        {step > 1 && (
-                            <button
-                                type="button"
-                                onClick={handlePrev}
-                                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black"
-                            >
-                                Back
-                            </button>
-                        )}
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            {loading ? 'Processing...' : step === 3 ? 'Create Account' : 'Next'}
-                        </button>
+                <div className="p-8 md:p-12">
+                    <div className="mb-8">
+                        <h2 className="text-2xl font-bold text-zinc-900">
+                            {step === 1 && "Let's start with your identity"}
+                            {step === 2 && "Setup your business profile"}
+                            {step === 3 && "Choose your growth plan"}
+                        </h2>
+                        <p className="text-sm text-zinc-500 mt-1">
+                            Step {step} of 3
+                        </p>
                     </div>
-                </form>
-                <div className="text-center mt-4">
-                    <p className="text-sm text-gray-600">
-                        Already have an account? <Link href="/login" className="font-medium text-black hover:text-gray-800">Sign in</Link>
+
+                    {error && (
+                        <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm flex items-center">
+                            <ShieldCheck className="h-4 w-4 mr-2" />
+                            {error}
+                        </div>
+                    )}
+
+                    <form onSubmit={step === 3 ? handleSubmit : handleNext} className="space-y-6">
+
+                        {/* Step 1: Personal & Account Info */}
+                        {step === 1 && (
+                            <div className="space-y-5 animate-in fade-in slide-in-from-right-8 duration-500">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-700 mb-1">Full Name</label>
+                                        <div className="relative">
+                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <User className="h-5 w-5 text-zinc-400" />
+                                            </div>
+                                            <input
+                                                name="fullName"
+                                                type="text"
+                                                required
+                                                className="block w-full pl-10 pr-3 py-3 border border-zinc-300 rounded-lg focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                                placeholder="John Doe"
+                                                value={formData.fullName}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-zinc-700 mb-1">WhatsApp Number</label>
+                                        <input
+                                            name="whatsappNumber"
+                                            type="tel"
+                                            required
+                                            className="block w-full px-3 py-3 border border-zinc-300 rounded-lg focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                            placeholder="+234..."
+                                            value={formData.whatsappNumber}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Email Address</label>
+                                    <input
+                                        name="email"
+                                        type="email"
+                                        required
+                                        className="block w-full px-3 py-3 border border-zinc-300 rounded-lg focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                        placeholder="you@example.com"
+                                        value={formData.email}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Password</label>
+                                    <input
+                                        name="password"
+                                        type="password"
+                                        required
+                                        className="block w-full px-3 py-3 border border-zinc-300 rounded-lg focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                        placeholder="••••••••"
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2: Brand Profile */}
+                        {step === 2 && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Brand Name</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                            <Store className="h-5 w-5 text-zinc-400" />
+                                        </div>
+                                        <input
+                                            name="brandName"
+                                            type="text"
+                                            required
+                                            className="block w-full pl-10 pr-3 py-3 border border-zinc-300 rounded-lg focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                            placeholder="My Awesome Brand"
+                                            value={formData.brandName}
+                                            onChange={handleChange}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Subdomain</label>
+                                    <div className="flex rounded-lg shadow-sm">
+                                        <input
+                                            type="text"
+                                            name="username"
+                                            required
+                                            className="flex-1 min-w-0 block w-full px-3 py-3 rounded-l-lg border border-zinc-300 focus:ring-[var(--primary)] focus:border-[var(--primary)] text-zinc-900 placeholder-zinc-400"
+                                            placeholder="mybrand"
+                                            value={formData.username}
+                                            onChange={handleChange}
+                                        />
+                                        <span className="inline-flex items-center px-4 rounded-r-lg border border-l-0 border-zinc-300 bg-zinc-50 text-zinc-500 text-sm font-medium">
+                                            .mybrand.com.ng
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-700 mb-1">Brand Logo (Optional)</label>
+                                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-zinc-300 border-dashed rounded-lg hover:border-zinc-400 transition-colors">
+                                        <div className="space-y-1 text-center">
+                                            {logoPreview ? (
+                                                <img src={logoPreview} alt="Logo Preview" className="mx-auto h-24 w-24 rounded-full object-cover mb-3" />
+                                            ) : (
+                                                <Upload className="mx-auto h-12 w-12 text-zinc-400" />
+                                            )}
+                                            <div className="flex text-sm text-zinc-600 justify-center">
+                                                <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-[var(--primary)] hover:text-orange-500 focus-within:outline-none">
+                                                    <span>Upload a file</span>
+                                                    <input id="file-upload" name="logo" type="file" className="sr-only" onChange={handleChange} accept="image/*" />
+                                                </label>
+                                                <p className="pl-1">or drag and drop</p>
+                                            </div>
+                                            <p className="text-xs text-zinc-500">PNG, JPG, GIF up to 5MB</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-zinc-50 p-4 rounded-lg border border-zinc-200">
+                                    <div className="flex items-start">
+                                        <div className="flex items-center h-5">
+                                            <input
+                                                id="cacRegistered"
+                                                name="cacRegistered"
+                                                type="checkbox"
+                                                className="focus:ring-[var(--primary)] h-4 w-4 text-[var(--primary)] border-zinc-300 rounded"
+                                                checked={formData.cacRegistered}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+                                        <div className="ml-3 text-sm">
+                                            <label htmlFor="cacRegistered" className="font-medium text-zinc-900">Business is registered with CAC</label>
+                                            <p className="text-zinc-500">Get a verification badge on your profile.</p>
+                                        </div>
+                                    </div>
+                                    {formData.cacRegistered && (
+                                        <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                                            <label className="block text-sm font-medium text-zinc-700 mb-1">RC or BN Number</label>
+                                            <input
+                                                name="cacNumber"
+                                                type="text"
+                                                className="block w-full px-3 py-2 border border-zinc-300 rounded-md focus:ring-[var(--primary)] focus:border-[var(--primary)] sm:text-sm"
+                                                placeholder="RC 123456"
+                                                value={formData.cacNumber}
+                                                onChange={handleChange}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: Pricing */}
+                        {step === 3 && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-right-8 duration-500">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Free Plan */}
+                                    <div
+                                        onClick={() => setFormData(prev => ({ ...prev, tier: 'Free' }))}
+                                        className={`cursor-pointer relative rounded-xl border-2 p-6 flex flex-col justify-between transition-all duration-200 ${formData.tier === 'Free' ? 'border-[var(--primary)] bg-orange-50 shadow-md transform scale-105' : 'border-zinc-200 hover:border-zinc-300'}`}
+                                    >
+                                        <div className="absolute top-4 right-4">
+                                            {formData.tier === 'Free' ? <CheckCircle className="h-6 w-6 text-[var(--primary)]" /> : <div className="h-6 w-6 rounded-full border-2 border-zinc-300" />}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-zinc-900">Free Plan</h3>
+                                            <p className="text-3xl font-extrabold text-zinc-900 mt-2">₦0<span className="text-sm font-medium text-zinc-500">/mo</span></p>
+                                            <p className="text-sm text-zinc-500 mt-4">Essential tools to get started.</p>
+                                        </div>
+                                        <ul className="mt-6 space-y-3 text-sm text-zinc-600">
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-zinc-400" /> Basic Profile</li>
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-zinc-400" /> 5 Products</li>
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-zinc-400" /> Standard Support</li>
+                                        </ul>
+                                    </div>
+
+                                    {/* Premium Plan */}
+                                    <div
+                                        onClick={() => setFormData(prev => ({ ...prev, tier: 'Premium' }))}
+                                        className={`cursor-pointer relative rounded-xl border-2 p-6 flex flex-col justify-between transition-all duration-200 ${formData.tier === 'Premium' ? 'border-[var(--primary)] bg-orange-50 shadow-md transform scale-105' : 'border-zinc-200 hover:border-zinc-300'}`}
+                                    >
+                                        <div className="absolute top-0 right-0 bg-black text-white text-xs font-bold px-3 py-1 rounded-bl-lg rounded-tr-lg">POPULAR</div>
+                                        <div className="absolute top-4 right-4">
+                                            {formData.tier === 'Premium' ? <CheckCircle className="h-6 w-6 text-[var(--primary)]" /> : <div className="h-6 w-6 rounded-full border-2 border-zinc-300" />}
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-zinc-900">Premium Plan</h3>
+                                            <p className="text-3xl font-extrabold text-zinc-900 mt-2">₦2,000<span className="text-sm font-medium text-zinc-500">/mo</span></p>
+                                            <p className="text-sm text-zinc-500 mt-4">Unleash full potential.</p>
+                                        </div>
+                                        <ul className="mt-6 space-y-3 text-sm text-zinc-600">
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-[var(--primary)]" /> Verified Badge</li>
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-[var(--primary)]" /> Unlimited Products</li>
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-[var(--primary)]" /> Status Gems & Sliding Banners</li>
+                                            <li className="flex items-center"><CheckCircle className="h-4 w-4 mr-2 text-[var(--primary)]" /> Analytics & Priority Support</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="pt-6 flex justify-between space-x-4">
+                            {step > 1 ? (
+                                <button
+                                    type="button"
+                                    onClick={handlePrev}
+                                    className="w-full flex justify-center py-3 px-4 border border-zinc-300 rounded-lg shadow-sm text-sm font-medium text-zinc-700 bg-white hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-colors"
+                                >
+                                    Back
+                                </button>
+                            ) : <div></div>}
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className={`w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-black hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--primary)] transition-all ${loading ? 'opacity-70 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
+                            >
+                                {loading ? 'Processing...' : step === 3 ? 'Create Account' : 'Continue'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <div className="px-8 py-4 bg-zinc-50 border-t border-zinc-200 text-center">
+                    <p className="text-sm text-zinc-600">
+                        Already have an account? <Link href="/login" className="font-medium text-[var(--primary)] hover:underline">Sign in</Link>
                     </p>
                 </div>
             </div>

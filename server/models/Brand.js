@@ -1,36 +1,63 @@
 const mongoose = require('mongoose');
 
 const BrandSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true, lowercase: true, trim: true }, // Acts as subdomain
+    username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     brandName: { type: String, required: true },
+    fullName: { type: String, required: true },
     description: { type: String },
 
     // Brand Identity & Settings
     logoUrl: { type: String, default: '' },
     coverUrl: { type: String, default: '' },
-    themeColor: { type: String, default: '#000000' }, // Default to Black/Standard
+    coverImages: [{ type: String }], // Multiple sliding banner images (Premium feature)
+    themeColor: { type: String, default: '#000000' },
 
     // Business Details
     tier: {
         type: String,
-        enum: ['Free', 'Basic', 'Standard', 'Premium', 'Gold'], // Mapping 1k, 2k, 3k, 5k to names or keeping as values used in logic. 
-        // User said: "Free, 1k, 2k, 3k, 5k". Let's use keys that represent these.
-        // Actually user said "prices... are free, 1k, 2k, 3k, 5k". Let's use descriptive keys: 'Free', 'Tier1', 'Tier2', 'Tier3', 'Tier4' or just the amounts.
-        // Let's stick to the user's terminology if possible or map them.
-        // "Basic, like 5 tiers" -> Free, 1k, 2k, 3k, 5k.
+        enum: ['Free', 'Premium'],
         default: 'Free'
     },
-    tierPrice: { type: Number, default: 0 }, // 0, 1000, 2000, 3000, 5000
+    subscription: {
+        status: { type: String, enum: ['Active', 'Inactive', 'Expired', 'None'], default: 'None' },
+        startDate: { type: Date },
+        endDate: { type: Date },
+        lastPaymentDate: { type: Date }
+    },
+
+    tierPrice: { type: Number, default: 0 },
     isVerified: { type: Boolean, default: false },
+
+    // Status Gems (Premium feature)
+    statusGem: {
+        type: String,
+        enum: ['None', 'Bronze', 'Silver', 'Gold', 'Diamond'],
+        default: 'None'
+    },
+    gemExpiry: { type: Date, default: null },
 
     cacDetails: {
         registered: { type: Boolean, default: false },
-        regNumber: { type: String, default: '' } // RC or BN number
+        regNumber: { type: String, default: '' }
     },
 
-    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    // Engagement & Reputation
+    engagementScore: { type: Number, default: 0 },
+    badges: [{
+        name: { type: String },
+        icon: { type: String },
+        dateAwarded: { type: Date, default: Date.now }
+    }],
+
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Brand' }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Brand' }],
+
+    // Analytics
+    views: { type: Number, default: 0 },
+    productClicks: { type: Number, default: 0 },
+
     whatsappNumber: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
 });

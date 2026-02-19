@@ -1,22 +1,37 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://mybrand-two.vercel.app",
+    process.env.CLIENT_URL
+].filter(Boolean);
+
 const io = new Server(server, {
     cors: {
-        origin: process.env.CLIENT_URL || "http://localhost:3001",
-        methods: ["GET", "POST", "PUT", "DELETE"]
+        origin: allowedOrigins,
+        methods: ["GET", "POST", "PUT", "DELETE"],
+        credentials: true
     }
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(express.json());
+app.use(cookieParser());
+app.use('/uploads', express.static('uploads')); // Serve uploaded files
+
 
 // Make io accessible to routes
 app.set('io', io);
@@ -32,6 +47,10 @@ app.use('/api/brands', require('./routes/brands'));
 app.use('/api/products', require('./routes/products'));
 app.use('/api/posts', require('./routes/posts'));
 app.use('/api/public', require('./routes/public'));
+app.use('/api/drags', require('./routes/drags'));
+app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/brand-search', require('./routes/brandSearch'));
+
 
 // Socket.io Connection
 io.on('connection', (socket) => {

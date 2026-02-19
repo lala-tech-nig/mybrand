@@ -16,16 +16,24 @@ router.get('/brand/:brandId', async (req, res) => {
 });
 
 // Create a product (Protected)
-router.post('/', auth, async (req, res) => {
+const upload = require('../middleware/upload');
+
+router.post('/', auth, upload.array('images', 5), async (req, res) => {
     try {
-        const { name, description, price, images } = req.body;
+        const { name, description, price } = req.body;
+
+        // Handle File Uploads
+        let imagePaths = [];
+        if (req.files) {
+            imagePaths = req.files.map(file => file.path);
+        }
 
         const newProduct = new Product({
             brand: req.brand.id,
             name,
             description,
             price,
-            images: images || []
+            images: imagePaths
         });
 
         const product = await newProduct.save();

@@ -38,3 +38,29 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+@layer base {
+  input, textarea, select {
+    color: #000000 !important;
+    background-color: #ffffff;
+    -webkit-text-fill-color: #000000 !important;
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af !important;
+    -webkit-text-fill-color: #9ca3af !important;
+    opacity: 1;
+  }
+
+  /* Dark themed inputs (on black backgrounds) */
+  input.dark-input, textarea.dark-input {
+    color: #ffffff !important;
+    background-color: transparent;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+
+  input.dark-input::placeholder, textarea.dark-input::placeholder {
+    color: #71717a !important;
+    -webkit-text-fill-color: #71717a !important;
+  }
+}

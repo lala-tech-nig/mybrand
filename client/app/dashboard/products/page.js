@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../../../utils/api';
 import { Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,16 +23,14 @@ export default function ProductsPage() {
             // Or maybe /api/products has a GET that filters by logged in user?
 
             // Temporary strategy: Get Brand ID first then fetch products
-            const authRes = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
-                headers: { 'x-auth-token': token }
-            });
+            const authRes = await api.get('/api/auth/me');
             const brandId = authRes.data.brand.id;
 
             // Use the public route or brand-specific route
             // The public route is /api/brands/:username -> returns products. 
             // But we might want a direct /api/products/brand/:id
             // Let's assume we can fetch by brand ID.
-            const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/products/brand/${brandId}`);
+            const res = await api.get(`/api/products/brand/${brandId}`);
             setProducts(res.data);
         } catch (err) {
             console.error(err);
@@ -44,10 +42,7 @@ export default function ProductsPage() {
     const handleDelete = async (id) => {
         if (!confirm('Are you sure you want to delete this product?')) return;
         try {
-            const token = localStorage.getItem('token');
-            await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/api/products/${id}`, {
-                headers: { 'x-auth-token': token }
-            });
+            await api.delete(`/api/products/${id}`);
             setProducts(prev => prev.filter(p => p._id !== id));
         } catch (err) {
             alert('Failed to delete product');
@@ -79,7 +74,11 @@ export default function ProductsPage() {
                     {products.map(product => (
                         <div key={product._id} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden group">
                             <div className="aspect-square bg-gray-100 relative">
-                                {product.imageUrl && <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />}
+                                {(product.images?.[0] || product.imageUrl) ? (
+                                    <img src={product.images?.[0] || product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400">No Image</div>
+                                )}
                                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <button
                                         onClick={() => handleDelete(product._id)}
